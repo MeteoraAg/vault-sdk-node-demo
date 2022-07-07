@@ -1,0 +1,13 @@
+comments
+
+- virtual price should be available on chain
+- weird overlap between API and on-chain data now - we need to structure the API to be much more focused on things that cannot be on-chain, and make the data much more accessible 
+-structure of the APY call is very confusing, should consider merging w vault state api 
+- in any case, APY should have an overall 
+    /** 
+    * apy: {
+    *      closest: 
+    *      average: 
+    *      long: 
+    * }
+- Key data like virtual price and state should not be provided via the API - it encourages one more layer that we do not need. Anything that can be accessible via on-chain should be kept as such.
