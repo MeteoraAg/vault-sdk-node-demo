@@ -65,6 +65,18 @@ const depositIntoVault = async (wallet: Wallet, amount:number, vault: VaultImpl)
     console.log(depositResult)       
 }
 
+// Withdraw from the vault 
+const withdrawFromVault = async (wallet: Wallet, amount:number, vault: VaultImpl) => {
+    console.log("\nWithdrawing SOL")
+
+    const amountOutBN = new BN(amount)
+    console.log(`Withdrawing ${amountOutBN} from vault`)
+    const withdrawTx = await vault.withdraw(mockWallet.publicKey, amountOutBN); // Web3 Transaction Object
+    console.log(`Waiting for confirmation...`)
+    const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash    
+    console.log(withdrawResult)       
+}
+
 (async () => {
     const vault: VaultImpl = await getVault();
 
@@ -73,7 +85,9 @@ const depositIntoVault = async (wallet: Wallet, amount:number, vault: VaultImpl)
 
     // deposit into vault
     const amountInLamports = 0.1 * 10 ** SOL_TOKEN_INFO.decimals; // 1.0 SOL
-    await depositIntoVault(mockWallet, amountInLamports, vault)
+    await depositIntoVault(mockWallet, amountInLamports, vault);
 
     // withdraws from vault
+    const amountOutLamports = 0.05 * 10 ** SOL_TOKEN_INFO.decimals; // 0.5 SOL
+    await withdrawFromVault(mockWallet, amountOutLamports, vault);
 })()
