@@ -20,14 +20,25 @@ const getVaultDetails = async (vaultImpl: VaultImpl) => {
     const vaultUnlockedAmount = (await vaultImpl.getWithdrawableAmount()).toNumber();
     const virtualPrice = (vaultUnlockedAmount / vaultImpl.lpSupply.toNumber()) || 0;
 
-    const strategyAllocation = (async () => {
-        const vaultStateAPI: VaultStateAPI = await (await fetch(`${KEEPER_URL['devnet']}/vault_state/${SOL_TOKEN_INFO.address}`)).json();
-        console.log('##', vaultStateAPI)
+    const vaultStateAPI: VaultStateAPI = await (await fetch(`${KEEPER_URL['devnet']}/vault_state/${SOL_TOKEN_INFO.address}`)).json();
+    const totalAllocation = vaultStateAPI.strategies.reduce((acc, item) => acc + item.liquidity, vaultStateAPI.token_amount)
 
-        // Vault reserves + all strategy allocations
-        const totalAllocation = vaultStateAPI.strategies.reduce((acc, item) => acc + item.liquidity, vaultStateAPI.token_amount)
-
-        return vaultStateAPI.strategies
+    return {
+        lpSupply: (await vaultImpl.getVaultSupply()).toString(),
+        withdrawableAmount: vaultUnlockedAmount,
+        virtualPrice,
+        usd_rate: vaultStateAPI.usd_rate,
+        closest_apy: vaultStateAPI.closest_apy,
+        average_apy: vaultStateAPI.average_apy,
+        long_apy: vaultStateAPI.long_apy,
+        earned_amount: vaultStateAPI.earned_amount,
+        virtual_price: vaultStateAPI.virtual_price,
+        total_amount: vaultStateAPI.total_amount,
+        total_amount_with_profit: vaultStateAPI.total_amount_with_profit,
+        token_amount: vaultStateAPI.token_amount,
+        fee_amount: vaultStateAPI.fee_amount,
+        lp_supply: vaultStateAPI.lp_supply,
+        strategyAllocation: vaultStateAPI.strategies
             .map(item => ({
                 name: item.strategy_name,
                 liquidity: item.liquidity,
@@ -40,14 +51,7 @@ const getVaultDetails = async (vaultImpl: VaultImpl) => {
                 allocation: ((vaultStateAPI.token_amount / totalAllocation) * 100).toFixed(0),
                 maxAllocation: 0,
             })
-            .sort((a, b) => b.liquidity - a.liquidity);
-    })()
-
-    return {
-        lpSupply: (await vaultImpl.getVaultSupply()).toString(),
-        withdrawableAmount: vaultUnlockedAmount,
-        virtualPrice,
-        strategyAllocation,
+            .sort((a, b) => b.liquidity - a.liquidity),
     }
 }
 
