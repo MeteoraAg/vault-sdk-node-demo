@@ -1,119 +1,86 @@
-import VaultImpl from '@mercurial-finance/vault-sdk';
 import { StaticTokenListResolutionStrategy, TokenInfo } from "@solana/spl-token-registry";
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { Wallet, AnchorProvider } from '@project-serum/anchor';
+import { AnchorProvider } from '@project-serum/anchor';
+import VaultImpl from '@mercurial-finance/vault-sdk';
 import { BN } from 'bn.js';
 import fetch from 'node-fetch';
-import fs from 'fs';
 
-// // Connection, Wallet, and AnchorProvider to interact with the network
-// const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
-// //  should be from file
-// const mockWallet = new Wallet(Keypair.fromSecretKey(key))
-
-interface Dictionary<T> {
-    [Key: string]: T;
-}
-
-const mockWallet = new Wallet(new Keypair());
-const devnetConnection = new Connection('https://api.devnet.solana.com/', { commitment: 'confirmed' });
+import { devnetConnection, KEEPER_URL, mockWallet } from './constants';
+import { VaultStateAPI } from './types';
+import { airDropSol, logScan } from './utils';
 
 const tokenMap = new StaticTokenListResolutionStrategy().resolve();
 const SOL_TOKEN_INFO = tokenMap.find(token => token.symbol === 'SOL') as TokenInfo;
-// const data:[number] = JSON.parse(fs.readFileSync('./mock.json', 'utf8'))
-
-// const key = Uint8Array.from(data)
-
-const SOL_VAULT_ADDRESS = "FERjPVNEa7Udq8CEv68h6tPL46Tq7ieE49HrE2wea3XT"
 
 const provider = new AnchorProvider(devnetConnection, mockWallet, {
     commitment: 'confirmed',
 });
 
-const LAMPORTS_PER_SOL = 1e9;
-
-const airDropSol = async (connection: Connection, publicKey: PublicKey, amount = 1 * LAMPORTS_PER_SOL) => {
-    try {
-        console.log("air drop sol to wallet")
-        const airdropSignature = await connection.requestAirdrop(
-            publicKey,
-            amount,
-        );
-        const latestBlockHash = await connection.getLatestBlockhash();
-        const airdropTx = await connection.confirmTransaction({
-            blockhash: latestBlockHash.blockhash,
-            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-            signature: airdropSignature,
-        });
-        console.log("airdropTx",airdropTx)
-    } catch (error) {
-        console.error(error);
-        throw error;
-    }
-};
-
-// connecting to the vault
-const getVault = async ()  => { 
-    return VaultImpl.create(devnetConnection, SOL_TOKEN_INFO);
-}
-
 // Get onchain data from the vault and offchain apy data from the api
-const getVaultDetails = async(vault: VaultImpl) => {
+const getVaultDetails = async (vaultImpl: VaultImpl) => {
+    const vaultUnlockedAmount = (await vaultImpl.getWithdrawableAmount()).toNumber();
+    const virtualPrice = (vaultUnlockedAmount / vaultImpl.lpSupply.toNumber()) || 0;
 
-    console.log("Vault Data For SOL")
+    const strategyAllocation = (async () => {
+        const vaultStateAPI: VaultStateAPI = await (await fetch(`${KEEPER_URL['devnet']}/vault_state/${SOL_TOKEN_INFO.address}`)).json();
+        console.log('##', vaultStateAPI)
 
-    const lpSupply = await vault.getVaultSupply();
-    console.log ("LP supply is " + lpSupply);
-    const unlockedAmount = await vault.getWithdrawableAmount()
-    console.log ("Unlocked Amount is " + unlockedAmount);
-    
-    const response = await fetch(`https://vaults.mercurial.finance/api/apy_state/${SOL_TOKEN_INFO.address}`);
-    const data = await response.json();
-    const closest_apy = data.closest_apy;
+        // Vault reserves + all strategy allocations
+        const totalAllocation = vaultStateAPI.strategies.reduce((acc, item) => acc + item.liquidity, vaultStateAPI.token_amount)
 
-    // TODO: needs to update the apy formatting
-    const display = closest_apy.filter( (w: Dictionary<String>) =>  w["strategy"] == SOL_VAULT_ADDRESS)[0];
-    console.log(`Current APY is ${display.apy}`)
+        return vaultStateAPI.strategies
+            .map(item => ({
+                name: item.strategy_name,
+                liquidity: item.liquidity,
+                allocation: ((item.liquidity / totalAllocation) * 100).toFixed(0),
+                maxAllocation: item.max_allocation,
+            }))
+            .concat({
+                name: 'Vault Reserves',
+                liquidity: vaultStateAPI.token_amount,
+                allocation: ((vaultStateAPI.token_amount / totalAllocation) * 100).toFixed(0),
+                maxAllocation: 0,
+            })
+            .sort((a, b) => b.liquidity - a.liquidity);
+    })()
 
+    return {
+        lpSupply: (await vaultImpl.getVaultSupply()).toString(),
+        withdrawableAmount: vaultUnlockedAmount,
+        virtualPrice,
+        strategyAllocation,
+    }
 }
 
-// Deposits into the vault 
-const depositIntoVault = async (wallet: Wallet, amount:number, vault: VaultImpl) => {
-    console.log("\nDespositing SOL")
+async function main() {
+    // Getting a Vault Implementation instance (SOL)
+    const vault: VaultImpl = await VaultImpl.create(
+        devnetConnection,
+        SOL_TOKEN_INFO,
+        {
+            cluster: 'devnet'
+        }
+    );
 
-    const amountInBN = new BN(amount)
-    console.log(`Depositing ${amountInBN} into vault`)
-    const depositTx = await vault.deposit(mockWallet.publicKey, amountInBN); // Web3 Transaction Object
-    console.log(`Waiting for confirmation...`)
-    const depositResult = await provider.sendAndConfirm(depositTx); // Transaction hash    
-    console.log(depositResult)       
-}
-
-// Withdraw from the vault 
-const withdrawFromVault = async (wallet: Wallet, amount:number, vault: VaultImpl) => {
-    console.log("\nWithdrawing SOL")
-
-    const amountOutBN = new BN(amount)
-    console.log(`Withdrawing ${amountOutBN} from vault`)
-    const withdrawTx = await vault.withdraw(mockWallet.publicKey, amountOutBN); // Web3 Transaction Object
-    console.log(`Waiting for confirmation...`)
-    const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash    
-    console.log(withdrawResult)       
-}
-
-(async () => {
-    const vault: VaultImpl = await getVault();
-
+    // Airdrop to devnet wallet
     await airDropSol(devnetConnection, mockWallet.publicKey);
 
-    // print vault details
-    await getVaultDetails(vault);
+    // Get vault details
+    const details = await getVaultDetails(vault);
+    console.log('Vault details', JSON.stringify(details, null, 2))
 
-    // deposit into vault
-    const amountInLamports = 0.1 * 10 ** SOL_TOKEN_INFO.decimals; // 1.0 SOL
-    await depositIntoVault(mockWallet, amountInLamports, vault);
+    // Deposits into the vault 
+    const depositAmount = 0.1;
+    console.log(`Depositing ${depositAmount} into vault`)
+    const depositTx = await vault.deposit(mockWallet.publicKey, new BN(depositAmount * 10 ** SOL_TOKEN_INFO.decimals)); // 0.1 SOL
+    const depositResult = await provider.sendAndConfirm(depositTx);
+    logScan('Deposit result: ', depositResult)
 
-    // withdraws from vault
-    const amountOutLamports = 0.05 * 10 ** SOL_TOKEN_INFO.decimals; // 0.5 SOL
-    await withdrawFromVault(mockWallet, amountOutLamports, vault);
-})()
+    // Withdraw from the vault
+    const withdrawAmount = 0.05;
+    console.log(`Withrawing ${withdrawAmount} from vault`)
+    const withdrawTx = await vault.withdraw(mockWallet.publicKey, new BN(withdrawAmount * 10 ** SOL_TOKEN_INFO.decimals)); // 0.05 SOL
+    const withdrawResult = await provider.sendAndConfirm(withdrawTx); // Transaction hash    
+    logScan('Withdraw result: ', withdrawResult)
+}
+
+main();
