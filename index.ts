@@ -6,31 +6,55 @@ import { BN } from 'bn.js';
 import fetch from 'node-fetch';
 import fs from 'fs';
 
-// Connection, Wallet, and AnchorProvider to interact with the network
-const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
-
-const tokenMap = new StaticTokenListResolutionStrategy().resolve();
-const SOL_TOKEN_INFO = tokenMap.find(token => token.symbol === 'SOL') as TokenInfo;
-const data:[number] = JSON.parse(fs.readFileSync('./mock.json', 'utf8'))
-
-const key = Uint8Array.from(data)
-
-const SOL_VAULT_ADDRESS = "FERjPVNEa7Udq8CEv68h6tPL46Tq7ieE49HrE2wea3XT"
-
-//  should be from file
-const mockWallet = new Wallet(Keypair.fromSecretKey(key))
-
-const provider = new AnchorProvider(mainnetConnection, mockWallet, {
-    commitment: 'confirmed',
-});
+// // Connection, Wallet, and AnchorProvider to interact with the network
+// const mainnetConnection = new Connection('https://api.mainnet-beta.solana.com');
+// //  should be from file
+// const mockWallet = new Wallet(Keypair.fromSecretKey(key))
 
 interface Dictionary<T> {
     [Key: string]: T;
 }
 
+const mockWallet = new Wallet(new Keypair());
+const devnetConnection = new Connection('https://api.devnet.solana.com/', { commitment: 'confirmed' });
+
+const tokenMap = new StaticTokenListResolutionStrategy().resolve();
+const SOL_TOKEN_INFO = tokenMap.find(token => token.symbol === 'SOL') as TokenInfo;
+// const data:[number] = JSON.parse(fs.readFileSync('./mock.json', 'utf8'))
+
+// const key = Uint8Array.from(data)
+
+const SOL_VAULT_ADDRESS = "FERjPVNEa7Udq8CEv68h6tPL46Tq7ieE49HrE2wea3XT"
+
+const provider = new AnchorProvider(devnetConnection, mockWallet, {
+    commitment: 'confirmed',
+});
+
+const LAMPORTS_PER_SOL = 1e9;
+
+const airDropSol = async (connection: Connection, publicKey: PublicKey, amount = 1 * LAMPORTS_PER_SOL) => {
+    try {
+        console.log("air drop sol to wallet")
+        const airdropSignature = await connection.requestAirdrop(
+            publicKey,
+            amount,
+        );
+        const latestBlockHash = await connection.getLatestBlockhash();
+        const airdropTx = await connection.confirmTransaction({
+            blockhash: latestBlockHash.blockhash,
+            lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+            signature: airdropSignature,
+        });
+        console.log("airdropTx",airdropTx)
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+};
+
 // connecting to the vault
 const getVault = async ()  => { 
-    return VaultImpl.create(mainnetConnection, SOL_TOKEN_INFO);
+    return VaultImpl.create(devnetConnection, SOL_TOKEN_INFO);
 }
 
 // Get onchain data from the vault and offchain apy data from the api
@@ -79,6 +103,8 @@ const withdrawFromVault = async (wallet: Wallet, amount:number, vault: VaultImpl
 
 (async () => {
     const vault: VaultImpl = await getVault();
+
+    await airDropSol(devnetConnection, mockWallet.publicKey);
 
     // print vault details
     await getVaultDetails(vault);
