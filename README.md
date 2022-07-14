@@ -24,3 +24,7 @@ Discord: https://discord.com/channels/841152225564950528/864859354335412224
 
 1. `pnpm i`
 2. `pnpm run start`
+
+### Affiliate demo
+1. `pnpm i`
+2. `pnpm run start-affiliate`

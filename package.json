@@ -4,16 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node ./index.ts"
+    "start": "ts-node ./src/index.ts",
+    "start-affiliate": "ts-node ./src/affiliate.ts"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@mercurial-finance/vault-sdk": "^0.2.19",
+    "@mercurial-finance/vault-sdk": "0.2.22",
     "@project-serum/anchor": "^0.25.0",
     "@saberhq/solana-contrib": "^1.12",
     "@saberhq/token-utils": "^1.12",
-    "@solana/spl-token": "^0.2.0",
+    "@solana/spl-token": "0.1.8",
     "@solana/spl-token-registry": "^0.2.4574",
     "@solana/web3.js": "^1.47.3",
     "@types/node": "^18.0.3",
