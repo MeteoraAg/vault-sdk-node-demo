@@ -1,4 +1,4 @@
-import { types } from "@mercurial-finance/vault-sdk";
+import { StrategyType } from "@mercurial-finance/vault-sdk/src/vault/strategy";
 
 export type VaultStateAPI = {
     symbol: string;
@@ -22,7 +22,7 @@ export type VaultStateAPI = {
     strategies: Array<{
         pubkey: string;
         reserve: string;
-        strategy_type: types.StrategyType;
+        strategy_type: StrategyType;
         strategy_name: string;
         liquidity: number;
         reward: number;

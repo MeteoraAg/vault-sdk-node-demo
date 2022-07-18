@@ -44,7 +44,7 @@ async function main() {
         balance: (await vaultImpl.getUserBalance(mockWallet.publicKey)).toString(),
         'Partner Token': partnerInfo.partnerToken.toString(),
         'Vault': partnerInfo.vault.toString(),
-        'Total Fee': partnerInfo.totalFee.toString(),
+        'Total Fee': partnerInfo.outstandingFee.toString(),
         'Fee Ratio': partnerInfo.feeRatio.toString(),
         'Cumulative Fee': partnerInfo.cummulativeFee.toString(),
     })
